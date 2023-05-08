@@ -31,6 +31,7 @@ func newHTTPServer() *httpServer {
 }
 
 type ProduceRequest struct {
+	// required for step 1 - unmarshal (record type on log.go)
 	Record Record `json:"record"`
 }
 type ProduceResponse struct {
@@ -44,17 +45,22 @@ type ConsumeResponse struct {
 }
 
 func (s *httpServer) handleProduce(w http.ResponseWriter, r *http.Request) {
+	// Step 1: unmarshal JSON to Struct
 	var req ProduceRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// Step 2: use the struct to run endpoint logic & obtain result
 	off, err := s.Log.Append(req.Record)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Step 3: marshal request to JSON response
 	res := ProduceResponse{Offset: off}
 	err = json.NewEncoder(w).Encode(res)
 	if err != nil {
@@ -64,12 +70,15 @@ func (s *httpServer) handleProduce(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *httpServer) handleConsume(w http.ResponseWriter, r *http.Request) {
+	// Step 1: unmarshal JSON to Struct
 	var req ConsumeRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// Step 2: use the struct to run endpoint logic & obtain result
 	record, err := s.Log.Read(req.Offset)
 	if err == ErrOffsetNotFound {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -79,6 +88,8 @@ func (s *httpServer) handleConsume(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Step 3: marshal request to JSON response
 	res := ConsumeResponse{Record: record}
 	err = json.NewEncoder(w).Encode(res)
 	if err != nil {

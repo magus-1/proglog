@@ -24,7 +24,8 @@ type store struct {
 }
 
 func newStore(f *os.File) (*store, error) {
-	// Step 1: check a file's size (i.e. to continue using an existing store)
+	// Create the store
+	// check the file's size first (i.e. to continue using an existing store)
 	fi, err := os.Stat(f.Name())
 	if err != nil {
 		return nil, err
@@ -38,16 +39,22 @@ func newStore(f *os.File) (*store, error) {
 }
 
 func (s *store) Append(p []byte) (n uint64, pos uint64, err error) {
+	// Append Method
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	pos = s.size
+	pos = s.size // Knowing length of p makes it easier to read it later
+
+	// Buffer the length of p to s.buf, to reduce number of system calls and improve performance
 	if err := binary.Write(s.buf, enc, uint64(len(p))); err != nil {
 		return 0, 0, err
 	}
+
+	// write to the file, register number of bytes written to w
 	w, err := s.buf.Write(p)
 	if err != nil {
 		return 0, 0, err
 	}
+
 	w += lenWidth
 	s.size += uint64(w)
 	return uint64(w), pos, nil
@@ -56,13 +63,19 @@ func (s *store) Append(p []byte) (n uint64, pos uint64, err error) {
 func (s *store) Read(pos uint64) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// flush the buffer, writing any buffered data to the file
 	if err := s.buf.Flush(); err != nil {
 		return nil, err
 	}
+
+	// the length of data is read and saved to size
 	size := make([]byte, lenWidth)
 	if _, err := s.File.ReadAt(size, int64(pos)); err != nil {
 		return nil, err
 	}
+
+	// fetch and return the record
 	b := make([]byte, enc.Uint64(size))
 	if _, err := s.File.ReadAt(b, int64(pos+lenWidth)); err != nil {
 		return nil, err

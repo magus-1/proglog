@@ -20,6 +20,7 @@ type index struct {
 }
 
 func newIndex(f *os.File, c Config) (*index, error) {
+	// creates an index for the given file f
 	idx := &index{
 		file: f,
 	}
@@ -27,8 +28,11 @@ func newIndex(f *os.File, c Config) (*index, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// track the size of the file as we add entries
 	idx.size = uint64(fi.Size())
 	if err = os.Truncate(
+		// We grow the file to the max index size before MMapping
 		f.Name(), int64(c.Segment.MaxIndexBytes),
 	); err != nil {
 		return nil, err
@@ -55,6 +59,7 @@ func (i *index) Close() error {
 	return i.file.Close()
 }
 func (i *index) Read(in int64) (out uint32, pos uint64, err error) {
+	// Read(int64) takes in an offset and returns the associated record's position in the store
 	if i.size == 0 {
 		return 0, 0, io.EOF
 	}
@@ -73,10 +78,14 @@ func (i *index) Read(in int64) (out uint32, pos uint64, err error) {
 }
 func (i *index) Write(off uint32, pos uint64) error {
 	if uint64(len(i.mmap)) < i.size+entWidth {
+		// Validate that there is space available
 		return io.EOF
 	}
+	// Encode offset and position to MMap file
 	enc.PutUint32(i.mmap[i.size:i.size+offWidth], off)
 	enc.PutUint64(i.mmap[i.size+offWidth:i.size+entWidth], pos)
+
+	// Increment position for next write
 	i.size += uint64(entWidth)
 	return nil
 }
